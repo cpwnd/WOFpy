@@ -94,6 +94,7 @@ class Series(wof_base.BaseSeries):
 
         :param r: ODM2 TimeSeriesResult Object
         :param aff: ODM2 Affiliation Object
+        :param tsrv: ODM2 TimeSeriesResultValues Object
         """
         fa_obj = r.FeatureActionObj
         u_obj = r.UnitsObj
@@ -109,9 +110,11 @@ class Series(wof_base.BaseSeries):
         # self.SiteCode = sf_obj.SamplingFeatureCode
         # self.SiteName = sf_obj.SamplingFeatureName
         self.Variable = Variable(v=v_obj, VarSampleMedium=r.SampledMediumCV,
-                                 v_tunit= tsrv.TimeAggregationIntervalUnitsObj,
-                                 v_timeinterval=tsrv.TimeAggregationInterval, v_unit=u_obj,
-                                 aggregationstatisticCV=r.AggregationStatisticCV, actiontypeCV=a_obj.ActionTypeCV)
+                                 v_tunit=tsrv.TimeAggregationIntervalUnitsObj,
+                                 v_timeinterval=tsrv.TimeAggregationInterval,
+                                 v_unit=u_obj,
+                                 aggregationstatisticCV=r.AggregationStatisticCV,
+                                 actiontypeCV=a_obj.ActionTypeCV)
         # self.VariableID = r.VariableID
         # self.VariableCode = v_obj.VariableCode
         # self.VariableName = v_obj.VariableNameCV
@@ -166,10 +169,11 @@ class DataValue(wof_base.BaseDataValue):
         localtime = datetime.strptime(self.LocalDateTime, '%Y-%m-%dT%H:%M:%S')
         self.DateTimeUTC = localtime+timedelta(hours=((-1)*int(v.ValueDateTimeUTCOffset)))
         self.UTCOffset = create_iso_utc_offset(v.ValueDateTimeUTCOffset)
+        self.CensorCode = v.CensorCodeCV
+
         if aff_obj is not None:
             self.SourceID = '%d' % aff_obj.AffiliationID
             # self.SourceCode = aff_obj.OrganizationObj.OrganizationCode
-        self.CensorCode = v.CensorCodeCV
         self.MethodID = v.ResultObj.FeatureActionObj.ActionObj.MethodObj.MethodID
         # self.MethodCode = v.ResultObj.FeatureActionObj.ActionObj.MethodObj.MethodCode
         self.QualityControlLevelID = v.ResultObj.ProcessingLevelObj.ProcessingLevelID
