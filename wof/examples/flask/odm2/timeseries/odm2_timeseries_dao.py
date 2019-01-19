@@ -55,7 +55,7 @@ class Odm2Dao(BaseDao):
         finally:
             pass
 
-    def get_match(self, cvkey, term):
+    def get_odm2cv_match(self, cvkey, term):
         for k, v in self.yml_dict[cvkey].items():
             if term in v:
                 return k
@@ -152,59 +152,63 @@ class Odm2Dao(BaseDao):
         :return: List of WOF Variables
         """
         self.db_check()
-        # TODO: Need to refine this function; currently seeking database.
-        l_var_codes = None
-        if var_codes is not None:
-            if not isinstance(var_codes, list):
-                l_var_codes = [var_codes]
-            else:
-                l_var_codes = var_codes
-
-        r_t_Arr = []
-        if l_var_codes is None:
+        if var_codes is None:
             if self.engine.name in ('postgresql', 'mssql'):
-                r_t = self.db_session.query(odm2_models.TimeSeriesResultValues). \
-                    join(odm2_models.TimeSeriesResults). \
+                r = self.db_session.query(odm2_models.TimeSeriesResults). \
                     distinct(odm2_models.TimeSeriesResults.VariableID).all()
             else:
-                r_t = self.db_session.query(odm2_models.TimeSeriesResultValues). \
-                    join(odm2_models.TimeSeriesResults). \
+                r = self.db_session.query(odm2_models.TimeSeriesResults). \
                     group_by(odm2_models.TimeSeriesResults.VariableID).all()
-            r_t_Arr.append(r_t)
         else:
-            for item in l_var_codes:
+            l_var_codes = var_codes if isinstance(var_codes, list) else [var_codes]
+
+            # TODO: Faster to query odm2_models.Variables alone to get var_ids, then use that in
+            #   odm2_models.TimeSeriesResults.VariableID in (var_ids) ?
+            # DONE: When using join on tables that have explicit foreign-key relationships,
+            #   defining the relationship in filter is redundant. Try deleting it, below.
+            # DONE: Test changing odm2_models.Variables.VariableID to odm2_models.TimeSeriesResults.VariableID, below
+            for var_code in l_var_codes:
+                query = self.db_session.query(odm2_models.TimeSeriesResults). \
+                    join(odm2_models.Variables). \
+                    filter(odm2_models.Variables.VariableCode == var_code)
                 if self.engine.name in ('postgresql', 'mssql'):
-                    r_t = self.db_session.query(odm2_models.TimeSeriesResultValues). \
-                        join(odm2_models.TimeSeriesResults). \
-                        join(odm2_models.Variables). \
-                        filter(
-                        odm2_models.Variables.VariableID == odm2_models.TimeSeriesResults.VariableID,
-                        odm2_models.Variables.VariableCode == item). \
-                        distinct(odm2_models.Variables.VariableID).all()
+                    r = query.distinct(odm2_models.TimeSeriesResults.VariableID).all()
                 else:
-                    r_t = self.db_session.query(odm2_models.TimeSeriesResultValues). \
-                        join(odm2_models.TimeSeriesResults). \
-                        join(odm2_models.Variables). \
-                        filter(
-                        odm2_models.Variables.VariableID == odm2_models.TimeSeriesResults.VariableID,
-                        odm2_models.Variables.VariableCode == item). \
-                        group_by(odm2_models.Variables.VariableID).all()
-                r_t_Arr.append(r_t)
+                    r = query.group_by(odm2_models.TimeSeriesResults.VariableID).all()
+
         v_arr = []
-        if len(r_t_Arr) is not 0:
-            for result_t in r_t_Arr:
-                for result in result_t:
-                    v = result.ResultObj.VariableObj
-                    u = result.ResultObj.UnitsObj
-                    s = result.ResultObj.SampledMediumCV
-                    t = result.TimeAggregationIntervalUnitsObj
-                    ti = result.TimeAggregationInterval
-                    ag = result.ResultObj.AggregationStatisticCV
-                    at = result.ResultObj.FeatureActionObj.ActionObj.ActionTypeCV
-                    w_v = model.Variable(v, s, u, t, ti, ag, at)
-                    w_v.DataType = self.get_match('datatype', w_v.DataType)
-                    w_v.SampleMedium = self.get_match('samplemedium', w_v.SampleMedium)
-                    v_arr.append(w_v)
+        for ri in r:
+            fa_obj = ri.FeatureActionObj
+            a_obj = fa_obj.ActionObj
+            # v = r.VariableObj
+            # u = r.UnitsObj
+            # s = r.SampledMediumCV
+            # t = r.TimeAggregationIntervalUnitsObj
+            # ti = r.TimeAggregationInterval
+            # ag = r.AggregationStatisticCV
+            # at = r.FeatureActionObj.ActionObj.ActionTypeCV
+
+            tsrv = self.db_session.query(odm2_models.TimeSeriesResultValues). \
+                filter(odm2_models.TimeSeriesResultValues.ResultID == ri.ResultID).first()
+            if tsrv is None:
+                TimeAggregationIntervalUnitsObj = None
+                TimeAggregationInterval = None
+            else:
+                TimeAggregationIntervalUnitsObj = tsrv.TimeAggregationIntervalUnitsObj
+                TimeAggregationInterval = tsrv.TimeAggregationInterval
+
+            w_v = model.Variable(v=ri.VariableObj,
+                                 VarSampleMedium=ri.SampledMediumCV,
+                                 v_unit=ri.UnitsObj,
+                                 v_tunit=TimeAggregationIntervalUnitsObj,
+                                 v_timeinterval=TimeAggregationInterval,
+                                 aggregationstatisticCV=ri.AggregationStatisticCV,
+                                 actiontypeCV=a_obj.ActionTypeCV)
+
+            # w_v = model.Variable(v, s, u, t, ti, ag, at)
+            w_v.DataType = self.get_odm2cv_match('datatype', w_v.DataType)
+            w_v.SampleMedium = self.get_odm2cv_match('samplemedium', w_v.SampleMedium)
+            v_arr.append(w_v)
 
         return v_arr
 
@@ -272,9 +276,10 @@ class Odm2Dao(BaseDao):
             r[i].tsrv_EndDateTime = edt_dict[r[i].ResultID]
             tsrv = self.db_session.query(odm2_models.TimeSeriesResultValues). \
                 filter(odm2_models.TimeSeriesResults.ResultID == r[i].ResultID).first()
+
             w_r = model.Series(r[i], aff, tsrv)
-            w_r.Variable.DataType = self.get_match('datatype', w_r.Variable.DataType)
-            w_r.Variable.SampleMedium = self.get_match('samplemedium', w_r.Variable.SampleMedium)
+            w_r.Variable.DataType = self.get_odm2cv_match('datatype', w_r.Variable.DataType)
+            w_r.Variable.SampleMedium = self.get_odm2cv_match('samplemedium', w_r.Variable.SampleMedium)
             w_r.SampleMedium = w_r.Variable.SampleMedium
             r_arr.append(w_r)
         return r_arr
@@ -301,7 +306,6 @@ class Odm2Dao(BaseDao):
                      odm2_models.Results.ResultID).all()
 
         ids = [i.ResultID for i in r]
-
         edt_dict = _get_tsrv_enddatetimes(self.db_session, ids)
 
         r_arr = []
@@ -315,9 +319,10 @@ class Odm2Dao(BaseDao):
             r[i].tsrv_EndDateTime = edt_dict[r[i].ResultID]
             tsrv = self.db_session.query(odm2_models.TimeSeriesResultValues). \
                 filter(odm2_models.TimeSeriesResults.ResultID == r[i].ResultID).first()
+
             w_r = model.Series(r[i], aff, tsrv)
-            w_r.Variable.DataType = self.get_match('datatype', w_r.Variable.DataType)
-            w_r.Variable.SampleMedium = self.get_match('samplemedium', w_r.Variable.SampleMedium)
+            w_r.Variable.DataType = self.get_odm2cv_match('datatype', w_r.Variable.DataType)
+            w_r.Variable.SampleMedium = self.get_odm2cv_match('samplemedium', w_r.Variable.SampleMedium)
             w_r.SampleMedium = w_r.Variable.SampleMedium
             r_arr.append(w_r)
         return r_arr
@@ -381,7 +386,7 @@ class Odm2Dao(BaseDao):
                         join(odm2_models.ActionBy). \
                         filter(odm2_models.ActionBy.ActionID == act_id).first()
                 w_v = model.DataValue(valueResult, aff)
-                w_v.CensorCode = self.get_match('censorcode', w_v.CensorCode)
+            w_v.CensorCode = self.get_odm2cv_match('censorcode', w_v.CensorCode)
                 v_arr.append(w_v)
         return v_arr
 
