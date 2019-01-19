@@ -9,7 +9,7 @@ import yaml
 from sqlalchemy import (create_engine, func)
 from sqlalchemy.orm import (scoped_session, sessionmaker)
 
-from odm2api.ODM2 import models as odm2_models
+import odm2api.models as odm2_models
 
 import wof.examples.flask.odm2.timeseries.sqlalch_odm2_models as model
 from wof.dao import BaseDao
