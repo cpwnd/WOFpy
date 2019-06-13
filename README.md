@@ -23,7 +23,7 @@ Documentation
 
 WOFpy documentation is currently (2019 January) being overhauled.
 Much of the previous documentation available at
-[http://odm2.github.io/ODM2PythonAPI/](http://odm2.github.io/ODM2PythonAPI/)
+[http://odm2.github.io/WOFpy/](http://odm2.github.io/WOFpy/)
 is out of date and should be used with care, mainly for conceptual descriptions.
 
 If you happen to run into the older documentation at http://pythonhosted.org/WOFpy, don't use it. It's not being maintained. It'll be removed eventually.
