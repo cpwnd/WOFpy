@@ -387,7 +387,7 @@ class Odm2Dao(BaseDao):
                         filter(odm2_models.ActionBy.ActionID == act_id).first()
                 w_v = model.DataValue(valueResult, aff)
             w_v.CensorCode = self.get_odm2cv_match('censorcode', w_v.CensorCode)
-                v_arr.append(w_v)
+            v_arr.append(w_v)
         return v_arr
 
     def get_method_by_id(self, method_id):
