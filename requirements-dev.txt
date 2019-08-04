@@ -1,5 +1,6 @@
 # optional
 odm2api
+pyyaml
 pyodbc
 requests
 sqlalchemy
